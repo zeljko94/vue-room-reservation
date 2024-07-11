@@ -1,0 +1,15 @@
+
+{
+    "data": [
+        {"id": 1, "brojKreveta": 1, "naziv": "Soba 1", "opis": "asdasdadadasdsa", "cijena": 50,  "thumbnailImg": "/demo/images/product/product-placeholder.svg"},
+        {"id": 2, "brojKreveta": 1, "naziv": "Soba 2", "opis": "asdasdadadasdsa", "cijena": 50,  "thumbnailImg": "/demo/images/product/product-placeholder.svg"},
+        {"id": 3, "brojKreveta": 1, "naziv": "Soba 3", "opis": "asdasdadadasdsa", "cijena": 50,  "thumbnailImg": "/demo/images/product/product-placeholder.svg"},
+        {"id": 4, "brojKreveta": 2, "naziv": "Soba 4", "opis": "asdasdadadasdsa", "cijena": 100, "thumbnailImg": "/demo/images/product/product-placeholder.svg"},
+        {"id": 5, "brojKreveta": 2, "naziv": "Soba 5", "opis": "asdasdadadasdsa", "cijena": 100, "thumbnailImg": "/demo/images/product/product-placeholder.svg"},
+        {"id": 6, "brojKreveta": 3, "naziv": "Soba 6", "opis": "asdasdadadasdsa", "cijena": 150, "thumbnailImg": "/demo/images/product/product-placeholder.svg"},
+        {"id": 7, "brojKreveta": 4, "naziv": "Soba 7", "opis": "asdasdadadasdsa", "cijena": 200, "thumbnailImg": "/demo/images/product/product-placeholder.svg"}
+        
+        
+    ]
+}
+    

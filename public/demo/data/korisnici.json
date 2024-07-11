@@ -1,0 +1,15 @@
+
+{
+    "data": [
+        {"id": 1, "username": "admin", "name": "admin", "lastName": "admin", "email": "admin@gmail.com", "password": "asdd1233", "role": "admin"},
+
+        
+        {"id": 2, "username": "user1", "name": "user1", "lastName": "user1", "email": "user1@gmail.com", "password": "asdd1233", "role": "user"},
+        {"id": 3, "username": "user2", "name": "user2", "lastName": "user2", "email": "user2@gmail.com", "password": "asdd1233", "role": "user"},
+        {"id": 4, "username": "user3", "name": "user3", "lastName": "user3", "email": "user3@gmail.com", "password": "asdd1233", "role": "user"},
+        {"id": 5, "username": "user4", "name": "user4", "lastName": "user4", "email": "user4@gmail.com", "password": "asdd1233", "role": "user"}
+        
+        
+    ]
+}
+    
