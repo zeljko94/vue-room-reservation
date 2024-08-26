@@ -1,12 +1,12 @@
 export default class Soba {
-    id: number;
+    id: string;
     brojKreveta: number;
     naziv: string;
     opis: string;
     thumbnailImg: string;
     cijena: number;
   
-    constructor(id: number, brojKreveta: number, naziv: string, opis: string, thumbnailImg: string, cijena: number) {
+    constructor(id: string, brojKreveta: number, naziv: string, opis: string, thumbnailImg: string, cijena: number) {
       this.id = id;
       this.brojKreveta = brojKreveta;
       this.naziv = naziv;

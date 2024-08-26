@@ -62,25 +62,38 @@ const hideDialog = () => {
     submitted.value = false;
 };
 
-const saveKorisnik = () => {
+const saveKorisnik = async () => {
     submitted.value = true;
-    if (korisnik.value.name && korisnik.value.name.trim() && 
+
+    if (korisnik.value.name && korisnik.value.name.trim() &&
         korisnik.value.lastName && korisnik.value.lastName.trim() &&
         korisnik.value.username && korisnik.value.username.trim() &&
         korisnik.value.email && isValidEmail(korisnik.value.email) && korisnik.value.email.trim() &&
         korisnik.value.password && korisnik.value.password.trim() &&
         korisnik.value.role) {
-        if (korisnik.value.id) {
-            korisnici.value[findIndexById(korisnik.value.id)] = korisnik.value;
-            toast.add({ severity: 'success', summary: 'Successful', detail: 'Korisnik ažuriran', life: 3000 });
-        } else {
-            korisnik.value.id = createId();
-            korisnik.role = korisnik.value.role.value;
-            korisnici.value.push(korisnik.value);
-            toast.add({ severity: 'success', summary: 'Successful', detail: 'Korisnik kreiran', life: 3000 });
+        
+        try {
+            if (korisnik.value.id) {
+                // Update existing user
+                await korisniciService.updateKorisnik(korisnik.value.id, korisnik.value);
+                korisnici.value[findIndexById(korisnik.value.id)] = { ...korisnik.value };
+                toast.add({ severity: 'success', summary: 'Successful', detail: 'Korisnik ažuriran', life: 3000 });
+            } else {
+                // Create new user
+                korisnik.value.id = createId(); // Assuming createId generates a unique ID
+                korisnik.value.role = korisnik.value.role.value; // Ensure role is correctly set
+                await korisniciService.createKorisnik(korisnik.value); // Backend call to create user
+                korisnici.value.push({ ...korisnik.value });
+                toast.add({ severity: 'success', summary: 'Successful', detail: 'Korisnik kreiran', life: 3000 });
+            }
+            
+            korisnikDialog.value = false;
+            korisnik.value = {}; // Reset the form
+        } catch (error) {
+            // Handle errors from the backend
+            console.error("Error saving korisnik:", error);
+            toast.add({ severity: 'error', summary: 'Error', detail: 'Došlo je do greške prilikom spremanja korisnika', life: 5000 });
         }
-        korisnikDialog.value = false;
-        korisnik.value = {};
     }
 };
 
@@ -94,12 +107,20 @@ const confirmDeleteKorisnik = (editKorisnik) => {
     deleteKorisnikDialog.value = true;
 };
 
-const deleteKorisnik = () => {
-    korisnici.value = korisnici.value.filter((val) => val.id !== korisnik.value.id);
-    deleteKorisnikDialog.value = false;
-    korisnik.value = {};
-    toast.add({ severity: 'success', summary: 'Successful', detail: 'Korisnik obrisan', life: 3000 });
+const deleteKorisnik = async () => {
+    try {
+        await korisniciService.deleteKorisnik(korisnik.value.id);
+        korisnici.value = korisnici.value.filter((val) => val.id !== korisnik.value.id);
+        deleteKorisnikDialog.value = false;
+        korisnikDialog.value = false;
+        korisnik.value = {};
+        toast.add({ severity: 'success', summary: 'Successful', detail: 'Korisnik obrisan', life: 3000 });
+    } catch (error) {
+        console.error("Error deleting korisnik:", error);
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Došlo je do greške prilikom brisanja korisnika', life: 5000 });
+    }
 };
+
 
 const isValidEmail = (email) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -118,11 +139,11 @@ const findIndexById = (id) => {
 };
 
 const createId = () => {
-    const maxId = Math.max(...korisnici._rawValue
-        .filter(user => user.id !== null)
-        .map(user => user.id));
-
-    return maxId + 1;
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
 };
 
 const exportCSV = () => {
@@ -132,11 +153,19 @@ const exportCSV = () => {
 const confirmDeleteSelected = () => {
     deleteKorisniciDialog.value = true;
 };
-const deleteSelectedKorisnici = () => {
-    korisnici.value = korisnici.value.filter((val) => !selectedKorisnici.value.includes(val));
-    deleteKorisniciDialog.value = false;
-    selectedKorisnici.value = null;
-    toast.add({ severity: 'success', summary: 'Successful', detail: 'Korisnici obrisani', life: 3000 });
+const deleteSelectedKorisnici = async () => {
+    try {
+        const idsToDelete = selectedKorisnici.value.map(korisnik => korisnik.id);
+        await korisniciService.deleteKorisnici(idsToDelete);
+        korisnici.value = korisnici.value.filter((val) => !selectedKorisnici.value.includes(val));
+        deleteKorisniciDialog.value = false;
+        selectedKorisnici.value = null;
+
+        toast.add({ severity: 'success', summary: 'Successful', detail: 'Korisnici obrisani', life: 3000 });
+    } catch (error) {
+        console.error("Error deleting korisnici:", error);
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Došlo je do greške prilikom brisanja korisnika', life: 5000 });
+    }
 };
 
 const initFilters = () => {
@@ -187,12 +216,12 @@ const initFilters = () => {
                     </template>
 
                     <Column selectionMode="multiple" headerStyle="width: 3rem"></Column>
-                    <Column field="id" header="Id" :sortable="true" headerStyle="width:14%; min-width:10rem;">
+                    <!-- <Column field="id" header="Id" :sortable="true" headerStyle="width:14%; min-width:10rem;">
                         <template #body="slotProps">
                             <span class="p-column-title">Id</span>
                             {{ slotProps.data.id }}
                         </template>
-                    </Column>
+                    </Column> -->
                     <Column field="name" header="Ime" :sortable="true" headerStyle="width:14%; min-width:10rem;">
                         <template #body="slotProps">
                             <span class="p-column-title">Ime</span>

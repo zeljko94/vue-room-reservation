@@ -13,7 +13,8 @@ const model = ref([
         items: 
         [
             { label: 'Početna', icon: 'pi pi-fw pi-home', to: '/dashboard' },
-            { label: 'Dinamička stranica (RSS Feeds)', icon: 'pi pi-fw pi-box', to: '/dynamic' }
+            { label: 'Dinamička stranica (RSS Feeds)', icon: 'pi pi-fw pi-box', to: '/dynamic' },
+            { label: 'Rezervacije', icon: 'pi pi-fw pi-calendar', to: '/administracija/rezervacije' }
         ]
     },
     isAdmin ? {
@@ -21,7 +22,6 @@ const model = ref([
         items: [
             { label: 'Korisnici', icon: 'pi pi-fw pi-users', to: '/administracija/korisnici' },
             { label: 'Sobe', icon: 'pi pi-fw pi-building', to: '/administracija/sobe' },
-            { label: 'Rezervacije', icon: 'pi pi-fw pi-calendar', to: '/administracija/rezervacije' }
         ]
     } : {}
 ]);

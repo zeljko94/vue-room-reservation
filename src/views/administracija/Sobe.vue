@@ -3,6 +3,7 @@ import { FilterMatchMode } from 'primevue/api';
 import { ref, onMounted, onBeforeMount } from 'vue';
 import { SobeService } from '@/service/SobeService';
 import { useToast } from 'primevue/usetoast';
+import Soba from '@/models/Soba';
 
 const toast = useToast();
 
@@ -10,7 +11,7 @@ const sobe = ref(null);
 const sobaDialog = ref(false);
 const deleteSobaDialog = ref(false);
 const deleteSobeDialog = ref(false);
-const soba = ref({});
+const soba = ref(null);
 const selectedSobe = ref(null);
 const dt = ref(null);
 const filters = ref({});
@@ -46,6 +47,27 @@ const formatCurrency = (value) => {
     return value.toLocaleString('hr-HR', { style: 'currency', currency: 'EUR' });
 };
 
+
+const onImageSelected = async (event) => {
+    const file = event.files[0];
+    
+    if (file) {
+        try {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                soba.value.thumbnailImg = reader.result; 
+                // toast.add({ severity: 'info', summary: 'Success', detail: 'File Uploaded', life: 3000 });
+            };
+            reader.readAsDataURL(file);
+        } catch (error) {
+            console.error('Error reading file:', error);
+            toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to read image', life: 5000 });
+        }
+    } else {
+        toast.add({ severity: 'warn', summary: 'Warning', detail: 'No image selected', life: 3000 });
+    }
+};
+
 const openNew = () => {
     soba.value = {};
     submitted.value = false;
@@ -57,24 +79,36 @@ const hideDialog = () => {
     submitted.value = false;
 };
 
-const saveSoba = () => {
+const saveSoba = async () => {
     submitted.value = true;
-    if (soba.value.naziv && soba.value.naziv.trim() && 
-        soba.value.brojKreveta) {
-        if (soba.value.id) {
-            soba.value.opis = soba.value.opis ? soba.value.opis.trim() : '';
-            sobe.value[findIndexById(soba.value.id)] = soba.value;
-            toast.add({ severity: 'success', summary: 'Successful', detail: 'Soba ažurirana', life: 3000 });
-        } else {
-            soba.value.id = createId();
-            soba.value.opis = soba.value.opis ? soba.value.opis.trim() : '';
-            sobe.value.push(soba.value);
-            toast.add({ severity: 'success', summary: 'Successful', detail: 'Soba kreirana', life: 3000 });
+
+    if (soba.value.naziv && soba.value.naziv.trim() && soba.value.brojKreveta) {
+        soba.value.opis = soba.value.opis ? soba.value.opis.trim() : '';
+
+        try {
+            if (soba.value.id) {
+                // Update existing room
+                await sobeService.updateSoba(soba.value.id, soba.value);
+                sobe.value[findIndexById(soba.value.id)] = soba.value;
+                toast.add({ severity: 'success', summary: 'Successful', detail: 'Soba ažurirana', life: 3000 });
+            } else {
+                // Create new room
+                soba.value.id = createId();
+                await sobeService.createSoba(soba.value);
+                sobe.value.push(soba.value);
+                toast.add({ severity: 'success', summary: 'Successful', detail: 'Soba kreirana', life: 3000 });
+            }
+        } catch (error) {
+            // Handle errors from the backend
+            console.error("Error saving soba:", error);
+            toast.add({ severity: 'error', summary: 'Error', detail: 'Došlo je do greške prilikom spremanja sobe', life: 5000 });
         }
+
         sobaDialog.value = false;
         soba.value = {};
     }
 };
+
 
 const editSoba = (editSoba) => {
     soba.value = { ...editSoba };
@@ -86,12 +120,20 @@ const confirmDeleteSoba = (editSoba) => {
     deleteSobaDialog.value = true;
 };
 
-const deleteSoba = () => {
-    sobe.value = sobe.value.filter((val) => val.id !== soba.value.id);
-    deleteSobaDialog.value = false;
-    soba.value = {};
-    toast.add({ severity: 'success', summary: 'Successful', detail: 'Soba obrisana', life: 3000 });
+const deleteSoba = async () => {
+    try {
+        await sobeService.deleteSoba(soba.value.id);
+        sobe.value = sobe.value.filter((val) => val.id !== soba.value.id);
+        deleteSobaDialog.value = false;
+        soba.value = {};
+        
+        toast.add({ severity: 'success', summary: 'Successful', detail: 'Soba obrisana', life: 3000 });
+    } catch (error) {
+        console.error("Error deleting soba:", error);
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Došlo je do greške prilikom brisanja sobe', life: 5000 });
+    }
 };
+
 
 const findIndexById = (id) => {
     let index = -1;
@@ -106,11 +148,11 @@ const findIndexById = (id) => {
 
 
 const createId = () => {
-    const maxId = Math.max(...sobe._rawValue
-        .filter(soba => soba.id !== null)
-        .map(soba => soba.id));
-
-    return maxId + 1;
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
 };
 
 const exportCSV = () => {
@@ -120,12 +162,22 @@ const exportCSV = () => {
 const confirmDeleteSelected = () => {
     deleteSobeDialog.value = true;
 };
-const deleteSelectedSobe = () => {
-    sobe.value = sobe.value.filter((val) => !selectedSobe.value.includes(val));
-    deleteSobeDialog.value = false;
-    selectedSobe.value = null;
-    toast.add({ severity: 'success', summary: 'Successful', detail: 'Sobe Deleted', life: 3000 });
+
+const deleteSelectedSobe = async () => {
+    try {
+        const ids = selectedSobe.value.map((soba) => soba.id);
+        await sobeService.deleteSobe(ids);
+        sobe.value = sobe.value.filter((val) => !selectedSobe.value.includes(val));
+        deleteSobeDialog.value = false;
+        selectedSobe.value = null;
+
+        toast.add({ severity: 'success', summary: 'Successful', detail: 'Sobe obrisane', life: 3000 });
+    } catch (error) {
+        console.error("Error deleting sobe:", error);
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Došlo je do greške prilikom brisanja soba', life: 5000 });
+    }
 };
+
 
 const initFilters = () => {
     filters.value = {
@@ -175,12 +227,12 @@ const initFilters = () => {
                     </template>
 
                     <Column selectionMode="multiple" headerStyle="width: 1%"></Column>
-                    <Column field="id" header="Id" :sortable="true" headerStyle="width:14%; min-width:10rem;">
+                    <!-- <Column field="id" header="Id" :sortable="true" headerStyle="width:14%; min-width:10rem;">
                         <template #body="slotProps">
                             <span class="p-column-title">Id</span>
                             {{ slotProps.data.id }}
                         </template>
-                    </Column>
+                    </Column> -->
                     <Column field="naziv" header="Naziv" :sortable="true" headerStyle="width:14%; min-width:10rem;">
                         <template #body="slotProps">
                             <span class="p-column-title">Naziv</span>
@@ -190,7 +242,7 @@ const initFilters = () => {
                     <Column header="Slika" headerStyle="width:14%; min-width:10rem;">
                         <template #body="slotProps">
                             <span class="p-column-title">Slika</span>
-                            <img :src="slotProps.data.thumbnailImg" :alt="slotProps.data.thumbnailImg" class="shadow-2" width="100" />
+                            <img :src="slotProps.data.thumbnailImg" :alt="slotProps.data.thumbnailImg" class="shadow-2" width="180" height="180" />
                         </template>
                     </Column>
                     <Column field="brojKreveta" header="Broj kreveta" :sortable="true" headerStyle="width:14%; min-width:8rem;">
@@ -202,7 +254,7 @@ const initFilters = () => {
                     <Column field="opis" header="Opis" :sortable="true" headerStyle="width:14%; min-width:10rem;">
                         <template #body="slotProps">
                             <span class="p-column-title">Opis</span>
-                            {{ slotProps.data.opis }}
+                            <span class="wrap-text">{{ slotProps.data.opis }}</span>
                         </template>
                     </Column>
                     <Column field="cijena" header="Cijena (po noćenju)" :sortable="true" headerStyle="width:14%; min-width:10rem;">
@@ -231,8 +283,8 @@ const initFilters = () => {
                     </Column>
                 </DataTable>
 
-                <Dialog v-model:visible="sobaDialog" :style="{ width: '450px' }" :header="soba.id ? 'Detalji o sobi' : 'Nova soba'" :modal="true" class="p-fluid">
-                    <img :src="soba.thumbnailImg" :alt="soba.thumbnailImg" v-if="soba.image" width="150" class="mt-0 mx-auto mb-5 block shadow-2" />
+                <Dialog v-model:visible="sobaDialog" :style="{ width: '450px' }" :header="soba?.id ? 'Detalji o sobi' : 'Nova soba'" :modal="true" class="p-fluid">
+                
                     <div class="field">
                         <label for="naziv">Naziv</label>
                         <InputText id="naziv" v-model.trim="soba.naziv" required="true" autofocus :invalid="submitted && !soba.naziv" />
@@ -251,6 +303,14 @@ const initFilters = () => {
                         <label for="cijena">Cijena</label>
                         <InputNumber id="cijena" v-model="soba.cijena" mode="decimal" :invalid="submitted && !soba.cijena"/>
                         <small class="p-invalid" v-if="submitted && !soba.cijena">Unesite cijenu.</small>
+                    </div>
+
+                    <div class="field">
+                        <FileUpload chooseLabel="Odaberi sliku" mode="basic" name="demo[]" accept="image/*" :maxFileSize="10000000" @uploader="onImageSelected" customUpload auto />
+                    </div>
+                
+                    <div class="field" v-if="soba.thumbnailImg">
+                        <img :src="soba.thumbnailImg" alt="Image preview" style="max-width: 100%; height: auto;" />
                     </div>
 
                     <template #footer>

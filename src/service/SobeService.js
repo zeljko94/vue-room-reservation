@@ -1,8 +1,33 @@
-export class SobeService {
+import { BaseRestApiService } from "./BaseRestApiService";
 
-    getSobe() {
-        return fetch('/demo/data/sobe.json', { headers: { 'Cache-Control': 'no-cache' } })
-            .then((res) => res.json())
-            .then((d) => d.data);
+export class SobeService extends BaseRestApiService {
+
+    constructor() {
+        super();
+        this.tableName = 'Sobe';
+    }
+
+    async getSobe() {
+        return this.get(this.tableName);
+    }
+
+    async getSoba(id) {
+        return this.get(`${this.tableName}/${id}`);
+    }
+
+    async createSoba(roomDto) {
+        return this.post(this.tableName, roomDto);
+    }
+
+    async updateSoba(id, roomDto) {
+        return this.put(`${this.tableName}/${id}`, roomDto);
+    }
+
+    async deleteSoba(id) {
+        return this.delete(`${this.tableName}/${id}`);
+    }
+
+    async deleteSobe(ids) {
+        return this.post(`${this.tableName}/delete-multiple`, ids);
     }
 }

@@ -10,16 +10,17 @@ import { format, isWithinInterval  } from 'date-fns';
 
 const toast = useToast();
 
-const selectedPocetniDate = ref(null);
-const selectedZavrsniDate = ref(null);
+const startDate = ref(null);
+const endDate = ref(null);
 const isEndDateValid = ref(true);
 const minDate = ref(new Date());
 
 const rezervacije = ref(null);
+const sveRezervacije = ref(null);
 const rezervacijaDialog = ref(false);
 const deleteRezervacijaDialog = ref(false);
 const deleteRezervacijeDialog = ref(false);
-const rezervacija = ref({});
+const rezervacija = ref(null);
 const selectedRezervacije = ref(null);
 const dt = ref(null);
 const filters = ref({});
@@ -51,40 +52,60 @@ const getSobaDisplayNameById = (id) => {
 };
 
 const validateDates = () => {
-  if (rezervacija.value.selectedPocetniDate && rezervacija.value.selectedZavrsniDate) {
-    isEndDateValid.value = new Date(rezervacija.value.selectedZavrsniDate) > new Date(rezervacija.value.selectedPocetniDate);
-  } else {
-    isEndDateValid.value = true;
-  }
+    if (rezervacija.value.startDate && rezervacija.value.endDate) {
+        const start = normalizeDate(rezervacija.value.startDate);
+        const end = normalizeDate(rezervacija.value.endDate);
+        isEndDateValid.value = end > start;
+    } else {
+        isEndDateValid.value = true;
+    }
+
+    calculateTotalPrice();
+};
+
+const normalizeDate = (date) => {
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(0, 0, 0, 0);
+    return normalizedDate;
 };
 
 const calculateTotalPrice = () => {
-    return 150;
+    if (!rezervacija.value || !rezervacija.value.roomId) return 0;
+    const room = sobe.value.find(s => s.id === rezervacija.value.roomId.id);
+    const numberOfPeople = rezervacija.value.brojOsoba || 1;
+    console.log(rezervacija.value.brojOsoba);
+    rezervacija.value.cijena = room ? room.cijena * numberOfPeople : 0;
+    return room ? room.cijena * numberOfPeople : 0;
 };
 
 onBeforeMount(() => {
     initFilters();
 });
 onMounted(() => {
-    rezervacijeService.getRezervacije().then((data) => {
-        rezervacije.value = data;
-        if(!authService.isAdmin()) {
-            rezervacije.value = rezervacije.value.filter(x => x.korisnikId === authService.getUserId());
-        }
-    });
-    korisniciService.getKorisnici().then((data) => (korisnici.value = data));
-    sobeService.getSobe().then((data) => (sobe.value = data));
+    fetchData();
 });
 const formatCurrency = (value) => {
     return value.toLocaleString('hr-HR', { style: 'currency', currency: 'EUR' });
 };
 
 const formatDate = (date, dateFormat = 'dd.MM.yyyy.') => {
-    if(typeof date === 'string' || date instanceof String) {
+    if (typeof date === 'string' || date instanceof String) {
         date = Date.parse(date);
     }
-    return format(new Date(date), dateFormat);
+    return format(date, dateFormat);
 };
+
+const fetchData = () => {
+    rezervacijeService.getRezervacije().then((data) => {
+        sveRezervacije.value = data;
+        rezervacije.value = data;
+        if(!authService.isAdmin()) {
+            rezervacije.value = rezervacije.value.filter(x => x.userId === authService.getUserId());
+        }
+    });
+    korisniciService.getKorisnici().then((data) => (korisnici.value = data));
+    sobeService.getSobe().then((data) => (sobe.value = data));
+}
 
 const openNew = () => {
     rezervacija.value = {};
@@ -97,89 +118,81 @@ const hideDialog = () => {
     submitted.value = false;
 };
 
-// const saveRezervacija = () => {
-//     submitted.value = true;
-//     validateDates();
-//     if (rezervacija.value.korisnikId &&
-//         rezervacija.value.sobaId &&
-//         rezervacija.value.brojOsoba &&
-//         rezervacija.value.startDate && rezervacija.value.endDate && isEndDateValid.value) {
-//         if (rezervacija.value.id) {
-//             rezervacije.value[findIndexById(rezervacija.value.id)] = rezervacija.value;
-//             toast.add({ severity: 'success', summary: 'Successful', detail: 'rezervacija Updated', life: 3000 });
-//         } else {
-
-//             rezervacija.value.id = createId();
-//             rezervacije.value.push(rezervacija.value);
-//             toast.add({ severity: 'success', summary: 'Successful', detail: 'rezervacija Created', life: 3000 });
-//         }
-//         rezervacijaDialog.value = false;
-//         rezervacija.value = {};
-//     }
-// };
-const saveRezervacija = () => {
+const saveRezervacija = async () => {
     submitted.value = true;
     validateDates();
 
-    if (!rezervacija.value.sobaId || !rezervacija.value.brojOsoba ||
-        !rezervacija.value.selectedPocetniDate || !rezervacija.value.selectedZavrsniDate || !isEndDateValid.value) {
+    if (!rezervacija.value.roomId || !rezervacija.value.brojOsoba ||
+        !rezervacija.value.startDate || !rezervacija.value.endDate || !isEndDateValid.value) {
         return; // Exit early if any required field is missing or invalid
     }
 
     // Check room availability
-    const isRoomAvailable = checkRoomAvailability(rezervacija.value.sobaId, rezervacija.value.selectedPocetniDate, rezervacija.value.selectedZavrsniDate);
+    const isRoomAvailable = checkRoomAvailability(rezervacija.value.roomId.id, rezervacija.value.startDate, rezervacija.value.endDate);
 
     if (!isRoomAvailable) {
         toast.add({ severity: 'error', summary: 'Error', detail: 'Željena soba je zauzeta za odabrani period.', life: 5000 });
         return;
     }
 
-    rezervacija.value.datumPocetka = rezervacija.value.selectedPocetniDate.toString();
-    rezervacija.value.datumZavrsetka = rezervacija.value.selectedZavrsniDate.toString();
-    rezervacija.value.korisnikId = authService.getUserId();
-    rezervacija.value.sobaId = rezervacija.value.sobaId.id;
-    delete rezervacija.value.selectedPocetniDate;
-    delete rezervacija.value.selectedZavrsniDate;
-    rezervacija.value.cijena = calculateTotalPrice();
-    // Proceed to save reservation
-    if (rezervacija.value.id) {
-        rezervacije.value[findIndexById(rezervacija.value.id)] = rezervacija.value;
-        toast.add({ severity: 'success', summary: 'Successful', detail: 'Uspješna izmjena', life: 3000 });
-    } else {
-        rezervacija.value.id = createId();
-        rezervacije.value.push(rezervacija.value);
-        toast.add({ severity: 'success', summary: 'Successful', detail: 'Rezervacija kreirana', life: 3000 });
-    }
+    rezervacija.value.startDate = normalizeDate(rezervacija.value.startDate);
+    rezervacija.value.endDate = normalizeDate(rezervacija.value.endDate);
+    rezervacija.value.userId = authService.getUserId();
+    rezervacija.value.roomId = rezervacija.value.roomId.id;
+    calculateTotalPrice();
 
-    rezervacijaDialog.value = false;
-    rezervacija.value = {};
+    try {
+        if (rezervacija.value.id) {
+            // Update existing reservation
+            await rezervacijeService.updateRezervacija(rezervacija.value.id, rezervacija.value);
+            rezervacije.value[findIndexById(rezervacija.value.id)] = rezervacija.value;
+            sveRezervacije.value[findIndexById(rezervacija.value.id)] = rezervacija.value;
+            toast.add({ severity: 'success', summary: 'Successful', detail: 'Uspješna izmjena', life: 3000 });
+        } else {
+            // Create new reservation
+            rezervacija.value.id = createId();
+            await rezervacijeService.createRezervacija(rezervacija.value);
+            rezervacije.value.push(rezervacija.value);
+            sveRezervacije.value.push(rezervacija.value);
+            toast.add({ severity: 'success', summary: 'Successful', detail: 'Rezervacija kreirana', life: 3000 });
+        }
+
+        rezervacijaDialog.value = false;
+        rezervacija.value = {};
+        delete rezervacija.value.startDate;
+        delete rezervacija.value.endDate;
+        fetchData();
+    } catch (error) {
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Došlo je do greške prilikom spremanja rezervacije', life: 5000 });
+    }
 };
 
-const checkRoomAvailability = (sobaId, pocetniDatum, zavrsniDatum) => {
-    // Convert dates to Date objects
-    pocetniDatum = new Date(pocetniDatum);
-    zavrsniDatum = new Date(zavrsniDatum);
+const checkRoomAvailability = (roomId, startDateStr, endDateStr) => {
+    // Convert input dates to Date objects
+    const startDate = normalizeDate(new Date(startDateStr));
+    const endDate = normalizeDate(new Date(endDateStr));
 
-    // Check if there are any overlapping reservations for the selected room and period
-    const overlappingReservation = rezervacije.value.find(rezervacija => {
-        return rezervacija.sobaId === sobaId &&
-            isWithinInterval(new Date(rezervacija.selectedPocetniDatum), { start: pocetniDatum, end: zavrsniDatum }) ||
-            isWithinInterval(new Date(rezervacija.selectedZavrsniDatum), { start: pocetniDatum, end: zavrsniDatum });
+
+    // Check for overlap in existing reservations
+    const overlappingReservation = sveRezervacije.value.find(rezervacija => {
+        const reservationStart = new Date(rezervacija.startDate);
+        const reservationEnd = new Date(rezervacija.endDate);
+
+
+        // Check for overlap
+        return rezervacija.roomId === roomId &&
+            (startDate < reservationEnd && endDate > reservationStart);
     });
 
-    return !overlappingReservation;
+    // Return true if no overlap is found, meaning the room is available
+    return overlappingReservation == undefined;
 };
+
+
+
 
 const editRezervacija = (editRezervacija) => {
     rezervacija.value = { ...editRezervacija };
-    // Ensure selectedPocetniDate and selectedZavrsniDate are Date objects
-    rezervacija.value.selectedPocetniDate = new Date(rezervacija.value.datumPocetka);
-    rezervacija.value.selectedZavrsniDate = new Date(rezervacija.value.datumZavrsetka);
-
-    // Find korisnik and soba objects by their IDs
-    rezervacija.value.korisnikId = korisnici.value.find(korisnik => korisnik.id === rezervacija.value.korisnikId);
-    rezervacija.value.sobaId = sobe.value.find(soba => soba.id === rezervacija.value.sobaId);
-
     rezervacijaDialog.value = true;
 };
 
@@ -188,12 +201,21 @@ const confirmDeleteRezervacija = (editRezervacija) => {
     deleteRezervacijaDialog.value = true;
 };
 
-const deleteRezervacija = () => {
-    rezervacije.value = rezervacije.value.filter((val) => val.id !== rezervacija.value.id);
-    deleteRezervacijaDialog.value = false;
-    rezervacija.value = {};
-    toast.add({ severity: 'success', summary: 'Successful', detail: 'Rezervacija obrisana', life: 3000 });
+const deleteRezervacija = async () => {
+    try {
+        await rezervacijeService.deleteRezervacija(rezervacija.value.id);
+        rezervacije.value = rezervacije.value.filter((val) => val.id !== rezervacija.value.id);
+        sveRezervacije.value = rezervacije.value.filter((val) => val.id !== rezervacija.value.id);
+        deleteRezervacijaDialog.value = false;
+        rezervacija.value = {};
+        toast.add({ severity: 'success', summary: 'Successful', detail: 'Rezervacija obrisana', life: 3000 });
+        fetchData();
+    }
+    catch(error) {
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Došlo je do greške prilikom brisanja korisnika', life: 5000 });
+    }
 };
+
 
 const findIndexById = (id) => {
     let index = -1;
@@ -207,11 +229,11 @@ const findIndexById = (id) => {
 };
 
 const createId = () => {
-    const maxId = Math.max(...rezervacije._rawValue
-        .filter(rezervacija => rezervacija.id !== null)
-        .map(rezervacija => rezervacija.id));
-
-    return maxId + 1;
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
 };
 
 const exportCSV = () => {
@@ -223,6 +245,7 @@ const confirmDeleteSelected = () => {
 };
 const deleteSelectedRezervacije = () => {
     rezervacije.value = rezervacije.value.filter((val) => !selectedRezervacije.value.includes(val));
+    sveRezervacije.value = rezervacije.value.filter((val) => !selectedRezervacije.value.includes(val));
     deleteRezervacijeDialog.value = false;
     selectedRezervacije.value = null;
     toast.add({ severity: 'success', summary: 'Successful', detail: 'Rezervacije obrisane', life: 3000 });
@@ -277,36 +300,36 @@ const initFilters = () => {
                     </template>
 
                     <Column selectionMode="multiple" headerStyle="width: 3rem"></Column>
-                    <Column field="id" header="Id" :sortable="true" headerStyle="width:14%; min-width:10rem;">
+                    <!-- <Column field="id" header="Id" :sortable="true" headerStyle="width:14%; min-width:10rem;">
                         <template #body="slotProps">
                             <span class="p-column-title">Id</span>
                             {{ slotProps.data.id }}
                         </template>
-                    </Column>
+                    </Column> -->
                     <Column field="korisnik" header="Korisnik" :sortable="true" headerStyle="width:14%; min-width:10rem;">
                         <template #body="slotProps">
                             <span class="p-column-title">Korisnik</span>
-                            {{ getKorisnikDisplayNameById(slotProps.data.korisnikId) }}
+                            {{ getKorisnikDisplayNameById(slotProps.data.userId) }}
                         </template>
                     </Column>
 
                     <Column field="soba" header="Soba" :sortable="true" headerStyle="width:14%; min-width:10rem;">
                         <template #body="slotProps">
                             <span class="p-column-title">Soba</span>
-                            {{ getSobaDisplayNameById(slotProps.data.sobaId) }}
+                            {{ getSobaDisplayNameById(slotProps.data.roomId) }}
                         </template>
                     </Column>
 
                     <Column field="datumPocetka" header="Datum početka" :sortable="true" headerStyle="width:14%; min-width:10rem;">
                         <template #body="slotProps">
                             <span class="p-column-title">Datum početka</span>
-                            {{ formatDate(slotProps.data.datumPocetka) }}
+                            {{ formatDate(slotProps.data.startDate) }}
                         </template>
                     </Column>
                     <Column field="datumZavrsetka" header="Datum završetka" :sortable="true" headerStyle="width:14%; min-width:10rem;">
                         <template #body="slotProps">
                             <span class="p-column-title">Datum završetka</span>
-                            {{ formatDate(slotProps.data.datumZavrsetka) }}
+                            {{ formatDate(slotProps.data.endDate) }}
                         </template>
                     </Column>
 
@@ -336,30 +359,30 @@ const initFilters = () => {
                     <!-- <img :src="'/demo/images/rezervacija/' + rezervacija.image" :alt="rezervacija.image" v-if="rezervacija.image" width="150" class="mt-0 mx-auto mb-5 block shadow-2" /> -->
                     <div>
                         <div class="field">
-                          <label for="selectedPocetniDate" class="mb-3">Početni datum</label>
+                          <label for="startDate" class="mb-3">Početni datum</label>
                           <Calendar 
                             id="startDate" 
-                            v-model="rezervacija.selectedPocetniDate" 
+                            v-model="rezervacija.startDate" 
                             :minDate="minDate"
                             placeholder="Odaberite početni datum" 
-                            :invalid="submitted && !rezervacija.selectedPocetniDate" 
+                            :invalid="submitted && !rezervacija.startDate" 
                             @change="validateDates" 
                           />
-                          <small class="p-invalid" v-if="submitted && !rezervacija.selectedPocetniDate">Odaberite početni datum.</small>
+                          <small class="p-invalid" v-if="submitted && !rezervacija.startDate">Odaberite početni datum.</small>
                         </div>
                         
                         <div class="field">
-                          <label for="selectedZavrsniDate" class="mb-3">End Date</label>
+                          <label for="endDate" class="mb-3">End Date</label>
                           <Calendar 
-                            id="selectedZavrsniDate" 
-                            v-model="rezervacija.selectedZavrsniDate" 
+                            id="endDate" 
+                            v-model="rezervacija.endDate" 
                             :minDate="minDate"
                             placeholder="Odaberite završni datum" 
-                            :invalid="submitted && (!rezervacija.selectedZavrsniDate || !isEndDateValid)" 
+                            :invalid="submitted && (!rezervacija.endDate || !isEndDateValid)" 
                             @change="validateDates" 
                           />
-                          <small class="p-invalid" v-if="submitted && (!rezervacija.selectedZavrsniDate || !isEndDateValid)">
-                            {{ !rezervacija.selectedZavrsniDate ? 'Odaberite završni datum.' : 'Završni datum mora biti poslije početnog datuma.' }}
+                          <small class="p-invalid" v-if="submitted && (!rezervacija.endDate || !isEndDateValid)">
+                            {{ !rezervacija.endDate ? 'Odaberite završni datum.' : 'Završni datum mora biti poslije početnog datuma.' }}
                           </small>
                         </div>
                       </div>
@@ -367,28 +390,28 @@ const initFilters = () => {
 
                     <!-- <div class="field" v-if="authService.isAdmin()">
                         <label for="role" class="mb-3">Korisnik</label>
-                        <Dropdown id="korisnikId" v-model="rezervacija.korisnikId" :options="korisnici" optionLabel="name" placeholder="Odaberite korisnika" :invalid="submitted && !rezervacija.korisnikId">
+                        <Dropdown id="userId" v-model="rezervacija.userId" :options="korisnici" optionLabel="name" placeholder="Odaberite korisnika" :invalid="submitted && !rezervacija.userId">
                           <template #value="slotProps">
                             <span>{{ slotProps.value ? slotProps.value.name : slotProps.placeholder }}</span>
                           </template>
                         </Dropdown>
-                        <small class="p-invalid" v-if="submitted && !rezervacija.korisnikId">Izaberite korisnika.</small>
+                        <small class="p-invalid" v-if="submitted && !rezervacija.userId">Izaberite korisnika.</small>
                     </div> -->
 
                     
                     <div class="field">
                         <label for="role" class="mb-3">Soba</label>
-                        <Dropdown id="sobaId" v-model="rezervacija.sobaId" :options="sobe" optionLabel="naziv" placeholder="Odaberite sobu" :invalid="submitted && !rezervacija.sobaId">
+                        <Dropdown id="roomId" v-model="rezervacija.roomId" @change="calculateTotalPrice" :options="sobe" optionLabel="naziv" placeholder="Odaberite sobu" :invalid="submitted && !rezervacija.roomId">
                           <template #value="slotProps">
                             <span>{{ slotProps.value ? slotProps.value.naziv : slotProps.placeholder }}</span>
                           </template>
                         </Dropdown>
-                        <small class="p-invalid" v-if="submitted && !rezervacija.sobaId">Izaberite sobu.</small>
+                        <small class="p-invalid" v-if="submitted && !rezervacija.roomId">Izaberite sobu.</small>
                     </div>
 
                     <div class="field">
                         <label for="brojOsoba">Broj osoba</label>
-                        <InputNumber id="brojOsoba" v-model="rezervacija.brojOsoba" :min="1" integeronly :invalid="submitted && !rezervacija.brojOsoba"/>
+                        <InputNumber id="brojOsoba" @input="calculateTotalPrice" v-model="rezervacija.brojOsoba" :min="1" integeronly :invalid="submitted && !rezervacija.brojOsoba"/>
                         <small class="p-invalid" v-if="submitted && !rezervacija.brojOsoba">Unesite broj osoba.</small>
                     </div>
 
@@ -396,7 +419,7 @@ const initFilters = () => {
 
                     <div class="field">
                         <label for="cijena" style="font-weight: bold;font-size: 16px;">TOTAL: &nbsp;</label>
-                        <span style="font-size: 16px;">{{formatCurrency(100)}}</span>
+                        <span style="font-size: 16px;">{{formatCurrency(rezervacija.cijena || 0)}}</span>
                         <!-- <InputNumber  readonly="true" id="cijena" v-model="rezervacija.cijena" integeronly :invalid="submitted && !rezervacija.cijena"/> -->
                     </div>
 

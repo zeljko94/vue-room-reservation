@@ -1,42 +1,98 @@
-import { KorisniciService } from './KorisniciService';
+import axios from 'axios';
+import { jwtDecode } from 'jwt-decode';
+import { BaseRestApiService } from './BaseRestApiService';
 
-export class AuthService {
-
-    constructor(loggedUserKey) {
-        this.loggedUserKey = 'user';
+export class AuthService extends BaseRestApiService {
+    
+    constructor(loggedUserTokenKey) {
+        super();
+        this.loggedUserTokenKey = loggedUserTokenKey || 'userToken'; // Ensure you use the provided key or default to 'user'
     }
 
+    async login(username, password) {
+        try {
+            const response = await axios.post(`${this.apiUrl}/Auth/Login`, {
+                username: username,
+                password: password,
+            });
+    
+            if (response.status === 200) {
+                const token = response.data;
+                if (token) {
+                    this.setLoggedInUserToken(token);
+                    return token;
+                } else {
+                    throw new Error('Login failed: No token received');
+                }
+            } else {
+                throw new Error(`Login failed: Status code ${response.status}`);
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
+    
 
-    login(email, password) {
-        let korisniciService = new KorisniciService();
-        return korisniciService.getKorisnici().then((korisnici) => {
-            return korisnici.find(x => x.email === email && x.password === password);
-        });
+    async register(name, lastName, email, username, password, role) {
+        try {
+            const response = await axios.post(`${this.apiUrl}/Auth/Register`, {
+                name,
+                lastName,
+                email,
+                username,
+                password,
+                role,
+            });
 
+            return response.data;
+        } catch (error) {
+            console.error('Registration request failed:', error);
+            throw error;
+        }
     }
 
     getUserId() {
-        return this.getLoggedInUser().id;
+        const token = this.getLoggedInUserToken();
+        return token ? this.decodeToken(token)?.nameid : null;
     }
 
-    setLoggedInUser(user) {
-        localStorage.setItem(this.loggedUserKey, JSON.stringify(user));
+    setLoggedInUserToken(token) {
+        localStorage.setItem(this.loggedUserTokenKey, JSON.stringify(token));
     }
 
     isLoggedIn() {
-        return this.getLoggedInUser() != undefined;
+        const token = this.getLoggedInUserToken();
+        return token !== null && !this.isTokenExpired(token);
     }
 
-
-    isAdmin() { 
-        return this.getLoggedInUser() && this.getLoggedInUser().role == 'admin';
+    isAdmin() {
+        const token = this.getLoggedInUserToken();
+        const decodedToken = this.decodeToken(token);
+        return decodedToken && decodedToken.role === 'admin';
     }
 
-    getLoggedInUser() {
-        return JSON.parse(localStorage.getItem(this.loggedUserKey));
+    getLoggedInUserToken() {
+        return JSON.parse(localStorage.getItem(this.loggedUserTokenKey));
     }
 
     logout() {
-        localStorage.setItem(this.loggedUserKey, null);
+        localStorage.removeItem(this.loggedUserTokenKey);
+    }
+
+    decodeToken(token) {
+        try {
+            return jwtDecode(token);
+        } catch (error) {
+            console.error('Token decoding failed:', error);
+            return null;
+        }
+    }
+
+    isTokenExpired(token) {
+        const decodedToken = this.decodeToken(token);
+        if (!decodedToken) return true;
+
+        const currentTime = Date.now() / 1000;
+        return decodedToken.exp < currentTime;
     }
 }
